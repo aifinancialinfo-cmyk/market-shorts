@@ -1,0 +1,89 @@
+name: 米国市況ショート 毎朝自動投稿
+
+on:
+  schedule:
+    # 日本時間 火〜土 6:47指定（= UTC 月〜金 21:47）。GitHubの混雑で実際は30分ほど遅れ、7:20〜7:40ごろの投稿になります
+    - cron: "47 21 * * 1-5"
+  workflow_dispatch:        # 手動実行ボタン
+    inputs:
+      privacy:
+        description: "公開設定 (public / unlisted / private)"
+        default: "private"
+      force:
+        description: "休場判定を無視して作成する (1=無視)"
+        default: "0"
+      targets:
+        description: "投稿先 (both / youtube / instagram)"
+        default: "both"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 必要なソフトを入れる
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg fonts-noto-cjk fonts-noto-cjk-extra
+          pip install -q -r requirements.txt
+      - name: 市場データ取得・原稿作成
+        id: fetch
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FORCE: ${{ github.event.inputs.force || '0' }}
+        run: |
+          set +e
+          python fetch_data.py data.json
+          code=$?
+          if [ $code -eq 78 ]; then echo "skip=1" >> $GITHUB_OUTPUT; exit 0; fi
+          exit $code
+      - name: 動画を作成（60秒）
+        if: steps.fetch.outputs.skip != '1'
+        run: python make_video.py data.json video.mp4
+      - name: 動画を保存（Actions画面からダウンロード可）
+        if: steps.fetch.outputs.skip != '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-${{ github.run_number }}
+          path: |
+            video.mp4
+            data.json
+          retention-days: 14
+      - name: YouTubeに投稿
+        if: steps.fetch.outputs.skip != '1' && (github.event.inputs.targets || 'both') != 'instagram'
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_PRIVACY: ${{ github.event.inputs.privacy || 'public' }}
+        run: python upload_youtube.py data.json video.mp4
+      - name: 動画を一時公開URLに置く（Instagram取り込み用）
+        id: media
+        if: steps.fetch.outputs.skip != '1' && (github.event.inputs.targets || 'both') != 'youtube'
+        continue-on-error: true
+        run: |
+          name="video-$(date -u +%Y%m%d%H%M).mp4"
+          mkdir -p /tmp/media && cp video.mp4 "/tmp/media/$name"
+          cd /tmp/media
+          git init -q -b media
+          git config user.name "github-actions" && git config user.email "actions@github.com"
+          git add "$name" && git commit -qm "media $name"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" media
+          echo "url=https://raw.githubusercontent.com/${{ github.repository }}/media/$name" >> $GITHUB_OUTPUT
+      - name: Instagramに投稿
+        if: steps.media.outputs.url != ''
+        continue-on-error: true
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          VIDEO_URL: ${{ steps.media.outputs.url }}
+        run: |
+          sleep 20
+          python upload_instagram.py data.json video.mp4

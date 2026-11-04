@@ -250,14 +250,14 @@ def main(out="data.json"):
                        f"原油は{yomi_dec(wt[2],1)}パーセント{pct_word(wt[2])}。"
                        f"ビットコインは{yomi_int(bt[0] // 1000 * 1000)}ドル台で推移しています。",
         "analysis": ai["analysis_speech"],
-        "outro": f"{nxt}保存して、答え合わせに使ってください。予想はコメントで。",
+        "outro": f"{nxt}保存して、答え合わせに使ってください。予想はコメントで。AIナビゲーターでした。",
     }
     # 字幕（表示用：読み仮名ではなく通常表記）
     sub = dict(sc)
     sub["hook"] = ""  # 冒頭は大きな文字そのものが字幕代わり
     sub["headline"] = sc["headline"].replace("ニューヨーク", "NY")
     if events:
-        sub["outro"] = "次に見る数字は、" + group_events(events[:3], lambda e: e["when"], lambda e: e["name"]) + "。保存して答え合わせに。予想はコメントで。"
+        sub["outro"] = "次に見る数字は、" + group_events(events[:3], lambda e: e["when"], lambda e: e["name"]) + "。保存して答え合わせに。予想はコメントで。AIナビゲーターでした。"
     else:
         sub["outro"] = sc["outro"].replace("エフオーエムシー", "FOMC")
     sub["indices"] = (f"ダウ平均は{int(abs(dw[1])):,}ドル{'高' if dw[1] > 0 else '安'}の{int(dw[0]):,}ドル。"

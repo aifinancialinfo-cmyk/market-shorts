@@ -16,7 +16,7 @@ CY = (0, 229, 255); CY_D = (0, 90, 110); WHITE = (235, 250, 255)
 UP = (255, 77, 109); DN = (64, 160, 255); FLAT = (170, 185, 195); AMB = (255, 196, 0)
 BG0 = (3, 8, 18); BG1 = (6, 22, 40)
 
-ORDER = ["hook", "headline", "indices", "rates_fx", "commodities", "analysis", "outro"]
+ORDER = ["indices", "rates_fx", "commodities", "analysis", "outro"]
 TAGS = {"hook": "BREAKING", "intro": "SYSTEM BOOT", "headline": "SUMMARY", "indices": "EQUITY INDEX",
         "rates_fx": "BOND / FX", "commodities": "COMMODITY / CRYPTO",
         "analysis": "AI ANALYSIS", "outro": "WATCH LIST"}
@@ -25,6 +25,7 @@ def ease(x): x = max(0, min(1, x)); return 1 - (1 - x) ** 3
 
 # ---------------- audio ----------------
 def synth(text, path, speed=1.3):
+    text = text.replace("米10年債", "べいじゅうねんさい")  # 読み方の指定
     x, sr = pyopenjtalk.tts(text, speed=speed, half_tone=-0.5)
     x = x.astype(np.int16)
     raw = path + ".raw.wav"
@@ -271,7 +272,7 @@ def main(dj, outp):
         for s in starts:
             if t >= s[1] - 0.25: cur = s
         k, s0, dur, slot = cur; p = max(0, (t - s0 + 0.25) / slot)
-        if k == "hook": p = 1.0  # 冒頭は1フレーム目から完成形を見せる
+        if k == ORDER[0]: p = max(p, 0.8)  # 冒頭は1フレーム目から数字を見せる
         img = bg.copy(); d = ImageDraw.Draw(img, "RGBA")
         for (x, y, sp, r) in PARTS:
             yy = (y - t * sp * 40) % H; d.ellipse([x - r, yy - r, x + r, yy + r], fill=(0, 229, 255, 70))
@@ -300,7 +301,7 @@ def main(dj, outp):
             for i, l in enumerate(shown): d.text((80, 1690 + i * 70), l, font=fSub, fill=WHITE)
         d.text((540, 1880), "※情報提供のみを目的としたもので投資助言ではありません", font=fSm, fill=(110, 140, 155), anchor="mm")
         # グリッチ
-        if (t - s0) < 0.18 and k not in ("intro", "hook"):
+        if (t - s0) < 0.18 and k != ORDER[0]:
             arr = np.asarray(img).copy()
             for _ in range(6):
                 y = random.randint(0, H - 40); h = random.randint(6, 30); sh = random.randint(-40, 40)

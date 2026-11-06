@@ -22,7 +22,7 @@ permissions:
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,8 +30,16 @@ jobs:
           python-version: "3.11"
       - name: 必要なソフトを入れる
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ffmpeg fonts-noto-cjk fonts-noto-cjk-extra
+          # ダウンロードが固まっても自動でやり直す（最大3回）
+          APT_OPT="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          for i in 1 2 3; do
+            if sudo timeout 120 apt-get update -q $APT_OPT && \
+               sudo timeout 300 apt-get install -y -q $APT_OPT ffmpeg fonts-noto-cjk fonts-noto-cjk-extra; then
+              break
+            fi
+            if [ "$i" = 3 ]; then echo "インストールに3回失敗しました"; exit 1; fi
+            echo "インストール失敗（${i}回目）。30秒後にやり直します"; sleep 30
+          done
           pip install -q -r requirements.txt
       - name: 市場データ取得・原稿作成
         id: fetch
